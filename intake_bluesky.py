@@ -346,6 +346,19 @@ class MongoEventStream(intake_xarray.base.DataSourceMixin):
 
             # Make DataArrays for Event data.
             for key in keys:
+                if data_keys[key].get('external'):
+                    # Modify data_table in place to replace datum_ids with
+                    # actual data.
+                    actual_data = []
+                    datum_documents = []
+                    for datum_id in data_table[key]:
+                        datum_documents.append(get_datum(datum_id))
+                    for datum_document in datum_documents:
+                        resource = get_resource(datum_id)
+                        catalog = get_catalog(resource)
+                        datum_data = catalog[datum_id]
+                        actual_data.append(datum_data)
+                data_table[key] = actual_data
                 field_metadata = data_keys[key]
                 # Verify the actual ndim by looking at the data.
                 ndim = numpy.asarray(data_table[key][0]).ndim
@@ -362,8 +375,6 @@ class MongoEventStream(intake_xarray.base.DataSourceMixin):
                 if dims is None:
                     # Construct the same default dimension names xarray would.
                     dims = tuple(f'dim_{i}' for i in range(ndim))
-                if data_keys[key].get('external'):
-                    raise NotImplementedError
                 else:
                     data_arrays[key] = xarray.DataArray(
                         data=data_table[key],
