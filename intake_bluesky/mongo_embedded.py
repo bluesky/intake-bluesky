@@ -118,14 +118,14 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                         if field[0:6] == 'count_':
                             return 0
                         else:
-                            return None
+                            return {}
 
                 def get_resource(uid):
                     resources = get_header_field('resources')
                     for resource in resources:
                         if resource['uid'] == uid:
                             return resource
-                    return None
+                    return {}
 
                 def get_datum(datum_id):
                     """ This method is likely very slow. """
@@ -138,7 +138,7 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     for datum in event_model.unpack_datum_page(datum_page):
                         if datum['datum_id'] == datum_id:
                             return datum
-                    return None
+                    return {}
 
                 def get_event_count(descriptor_uids):
                     return sum([get_header_field('count_' + uid)
