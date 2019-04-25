@@ -204,7 +204,7 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                 try:
                     N = int(name)
                 except ValueError:
-                    query = {'$and': [catalog._query, {'uid': name}]}
+                    query = {'$and': [catalog._query, {'start.uid': name}]}
                     header_doc = catalog._db.header.find_one(query)
                     if header_doc is None:
                         regex_query = {
@@ -217,7 +217,7 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                         elif len(matches) == 1:
                             header_doc, = matches
                         else:
-                            match_list = '\n'.join(doc['uid'] for doc in matches)
+                            match_list = '\n'.join(doc['start'][0]['uid'] for doc in matches)
                             raise ValueError(
                                 f"Multiple matches to partial uid {name!r}. "
                                 f"Up to 10 listed here:\n"
@@ -278,7 +278,8 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
             MongoDB query.
         """
         if query:
-            query = {f"start.{key}": val for key, val in query.items()}
+            query = {f"start.{key}".replace("start.$", "$", 1):
+                     val for key, val in query.items()}
         if self._query:
             query = {'$and': [self._query, query]}
         cat = type(self)(
