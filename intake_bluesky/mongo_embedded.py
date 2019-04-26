@@ -8,6 +8,8 @@ import intake.source.base
 import pymongo
 import pymongo.errors
 import heapq
+import json
+import re
 
 from .core import parse_handler_registry
 
@@ -288,8 +290,9 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
             MongoDB query.
         """
         if query:
-            query = {f"start.{key}".replace("start.$", "$", 1):
-                     val for key, val in query.items()}
+            query = query_embedder(query)
+            #query = {f"start.{key}".replace("start.$", "$", 1):
+            #         val for key, val in query.items()}
         if self._query:
             query = {'$and': [self._query, query]}
         cat = type(self)(
@@ -345,5 +348,13 @@ def interlace_gens(*gens):
         _, indx, val = heapq.heappop(heap)
         yield val
         safe_next(indx)
+
+def query_embedder(query):
+    query_string = json.dumps(query)
+    keys = [item.split('"')[-1] for item in query_string.split('":')][0:-1]
+    new_keys = [f'start.{key}' if '$' not in key else key for key in keys]
+    for index, key in enumerate(keys):
+        query_string = query_string.replace(key, new_keys[index])
+    return json.loads(query_string)
 
 intake.registry['mongo_metadatastore'] = BlueskyMongoCatalog
