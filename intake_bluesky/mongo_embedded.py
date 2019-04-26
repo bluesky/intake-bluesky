@@ -132,7 +132,9 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     for resource in resources:
                         if resource['uid'] == uid:
                             return resource
-                    return {}
+                    #return {}
+                    raise KeyError(
+                            f"Could not find Resource with datum_id={uid}")
 
                 def get_datum(datum_id):
                     """ This method is likely very slow. """
@@ -145,7 +147,8 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     for datum in event_model.unpack_datum_page(datum_page):
                         if datum['datum_id'] == datum_id:
                             return datum
-                    return {}
+                    raise KeyError(
+                            f"Could not find Datum with datum_id={datum_id}")
 
                 def get_event_count(descriptor_uids):
                     return sum([get_header_field('count_' + uid)
