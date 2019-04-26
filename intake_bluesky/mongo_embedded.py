@@ -7,6 +7,7 @@ import intake.catalog.local
 import intake.source.base
 import pymongo
 import pymongo.errors
+import heapq
 
 from .core import parse_handler_registry
 
@@ -55,22 +56,28 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
         if limit is None:
             limit = maxsize
 
-        page_cursor = self._db.event.find(
+        def event_gen(cursor):
+            nonlocal skip
+            nonlocal limit
+            for page_index, event_page in enumerate(cursor):
+                for event_index, event in (
+                        enumerate(event_model.unpack_event_page(event_page))):
+                    while ((event_index + 1) * (page_index + 1)) < skip:
+                        continue
+                    if not ((event_index + 1) * (page_index + 1)) < (skip + limit):
+                        return
+                    yield event
+
+        cursors = [event_gen(self._db.event.find(
                             {'$and': [
-                                {'descriptor': {'$in': descriptor_uids}},
+                                {'descriptor': descriptor},
                                 {'last_index': {'$gte': skip}},
                                 {'first_index': {'$lte': skip + limit}}]},
                             {'_id': False},
-                            sort=[('last_index', pymongo.ASCENDING)])
+                            sort=[('last_index', pymongo.ASCENDING)]))
+                   for descriptor in descriptor_uids]
 
-        for page_index, event_page in enumerate(page_cursor):
-            for event_index, event in (
-                    enumerate(event_model.unpack_event_page(event_page))):
-                while ((event_index + 1) * (page_index + 1)) < skip:
-                    continue
-                if not ((event_index + 1) * (page_index + 1)) < (skip + limit):
-                    return
-                yield event
+        yield from interlace_gens(*cursors)
 
     def _get_datum_cursor(self, resource_uid, skip=0, limit=None):
         if limit is None:
@@ -307,5 +314,33 @@ def _get_database(uri):
             f"Invalid client: {client} "
             f"Did you forget to include a database?") from err
 
+def interlace_gens(*gens):
+    """Take generators and interlace their results by timestamp
+     Parameters
+    ----------
+    gens : generators
+        Generators of (name, dict) pairs where the dict contains a 'time'
+        key.
+     Yields
+    -------
+    val : tuple
+        The next (name, dict) pair in time order
+     """
+    iters = [iter(g) for g in gens]
+    heap = []
+
+    def safe_next(indx):
+        try:
+            val = next(iters[indx])
+        except StopIteration:
+            return
+        heapq.heappush(heap, (val['time'], indx, val))
+
+    for i in range(len(iters)):
+        safe_next(i)
+    while heap:
+        _, indx, val = heapq.heappop(heap)
+        yield val
+        safe_next(indx)
 
 intake.registry['mongo_metadatastore'] = BlueskyMongoCatalog
