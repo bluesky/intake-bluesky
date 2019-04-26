@@ -9,7 +9,6 @@ import pymongo
 import pymongo.errors
 import heapq
 import json
-import re
 
 from .core import parse_handler_registry
 
@@ -134,7 +133,6 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     for resource in resources:
                         if resource['uid'] == uid:
                             return resource
-                    #return {}
                     raise KeyError(
                             f"Could not find Resource with datum_id={uid}")
 
@@ -291,8 +289,6 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
         """
         if query:
             query = query_embedder(query)
-            #query = {f"start.{key}".replace("start.$", "$", 1):
-            #         val for key, val in query.items()}
         if self._query:
             query = {'$and': [self._query, query]}
         cat = type(self)(
@@ -319,6 +315,7 @@ def _get_database(uri):
         raise ValueError(
             f"Invalid client: {client} "
             f"Did you forget to include a database?") from err
+
 
 def interlace_gens(*gens):
     """Take generators and interlace their results by timestamp
@@ -349,6 +346,7 @@ def interlace_gens(*gens):
         yield val
         safe_next(indx)
 
+
 def query_embedder(query):
     query_string = json.dumps(query)
     keys = [item.split('"')[-1] for item in query_string.split('":')][0:-1]
@@ -356,5 +354,6 @@ def query_embedder(query):
     for index, key in enumerate(keys):
         query_string = query_string.replace(key, new_keys[index])
     return json.loads(query_string)
+
 
 intake.registry['mongo_metadatastore'] = BlueskyMongoCatalog
