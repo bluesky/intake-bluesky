@@ -70,7 +70,9 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
         # It is acceptable to return None if the document does not exist.
         if doc is not None:
             doc.pop('_id')
-        return doc
+            return doc
+        else:
+            return {}
 
     def _get_event_descriptors(self, run_start_uid):
         results = []
