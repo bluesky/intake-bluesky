@@ -51,6 +51,20 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
         self.filler = event_model.Filler(parsed_handler_registry)
         super().__init__(**kwargs)
 
+    def _get_eventpage_cursor(self, descriptor_uids, skip=0, limit=None):
+        if limit is None:
+            limit = maxsize
+
+        page_cursor = self._db.event.find(
+                            {'$and': [
+                                {'descriptor': {'$in': descriptor_uids}},
+                                {'last_index': {'$gte': skip}},
+                                {'first_index': {'$lte': skip + limit}}]},
+                            {'_id': False},
+                            sort=[('last_index', pymongo.ASCENDING)])
+
+        return page_cursor
+
     def _get_event_cursor(self, descriptor_uids, skip=0, limit=None):
         if limit is None:
             limit = maxsize
@@ -71,6 +85,19 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                 if not ((event_index + 1) * (page_index + 1)) < (skip + limit):
                     return
                 yield event
+
+    def _get_datumpage_cursor(self, resource_uid, skip=0, limit=None):
+        if limit is None:
+            limit = maxsize
+
+        page_cursor = self._db.datum.find(
+                            {'$and': [
+                                {'resource': resource_uid},
+                                {'last_index': {'$gte': skip}},
+                                {'first_index': {'$lte': skip + limit}}]},
+                            {'_id': False},
+                            sort=[('last_index', pymongo.ASCENDING)])
+        return page_cursor
 
     def _get_datum_cursor(self, resource_uid, skip=0, limit=None):
         if limit is None:
@@ -141,8 +168,15 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     return None
 
                 def get_event_count(descriptor_uids):
-                    return sum([get_header_field('count_' + uid)
-                                for uid in descriptor_uids])
+                    result = 0
+                    for descriptor in descriptor_uids:
+                        query = catalog._db.event.find(
+                                    {'descriptor': descriptor})
+                        for doc in query:
+                            result += len(doc['uid'])
+                    return result
+                    #return sum([get_header_field('count_' + uid)
+                    #            for uid in descriptor_uids])
 
                 entry_metadata = {'start': get_header_field('start'),
                                   'stop': get_header_field('stop')}
