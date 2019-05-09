@@ -17,7 +17,7 @@ import warnings
 import xarray
 import itertools
 
-def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs,
+def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs, resource_docs,
                     get_eventpage_cursor, filler, get_resource,
                     get_datumpage_cursor, include=None, exclude=None):
     """
@@ -66,6 +66,9 @@ def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs,
     #print("DESC", descriptor_docs)
 
     data_keys = descriptor_docs[0]['data_keys']
+    more_keys = ['seq_num', 'uid']
+    fill = any(data_keys[key].get('external') for key in keys)
+
     if include:
         keys = list(set(data_keys) & set(include))
     elif exclude:
@@ -73,36 +76,43 @@ def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs,
     else:
         keys = list(data_keys)
 
-    more_keys = ['seq_num', 'uid']
-
     # Collect a Dataset for each descriptor. Merge at the end.
-    datasets = []
+    datum_dict = dict()
+    for resource in resource_docs:
+        datums = list(get_datumpage_cursor(resource['uid']))
+        keys = datums[0]['datum_kwargs'].keys()
+        datum_dict[resource['uid']] = xarray.merge(xarray_list(datums, keys,
+                                            sub_doc='datum_kwargs')
+
     for descriptor in descriptor_docs:
         events = list(get_eventpage_cursor([descriptor['uid']]))
-        print("PAGES", len(events))
+
         times = []
         for page in events:
             times.extend(page['time'])
 
-        for key in keys:
-            datasets.append(xarray.DataArray(
-                      data=numpy.concatenate(
-                      [numpy.asarray(page['data'][key]) for page in events]),
-                      dims=('time',),
-                      coords={'time': times},
-                      name=key))
+        data = xarray_list(events, keys, times, sub_doc='data')
+        more_data = xarray_list(events, more_keys, times)
+        filled = fill or xarray_list(events, keys, times,
+                                     sub_doc='filled', prefix='filled_')
 
+    if fill:
+        return filled('event_page', xarray.merge(data + ids))
+    else:
+        return xarray.merge(data + ids)
 
-        for key in more_keys:
-            datasets.append(xarray.DataArray(
-                      data=numpy.concatenate(
-                      [numpy.asarray(page[key]) for page in events]),
-                      dims=('time',),
-                      coords={'time': times},
-                      name=key))
+def xarray_list(page_list, key_list, times, sub_doc=None, prefix=""):
+    data = []
+    for key in key_list:
+        data.append(xarray.DataArray(
+                    data=numpy.concatenate(
+                    [numpy.asarray(page[sub_doc][key]) for page in page_list]),
+                    dims=('time',),
+                    coords={'time': times},
+                    name=prefix + key))
+    return data
 
-    return xarray.merge(datasets)
-        #  Fill events if needed.
+#  Fill events if needed.
         #if False: # any(data_keys[key].get('external') for key in keys):
         #    for event in events:
         #        try:
