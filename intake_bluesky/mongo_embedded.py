@@ -7,6 +7,7 @@ import intake.catalog.local
 import intake.source.base
 import pymongo
 import pymongo.errors
+import bsonnumpy
 
 from .core import parse_handler_registry
 
@@ -186,11 +187,11 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     get_run_stop=partial(get_header_field, 'stop'),
                     get_event_descriptors=partial(
                                     get_header_field, 'descriptors'),
-                    get_event_cursor=catalog._get_event_cursor,
+                    get_event_cursor=catalog._get_eventpage_cursor,
                     get_event_count=get_event_count,
                     get_resource=get_resource,
                     get_datum=get_datum,
-                    get_datum_cursor=catalog._get_datum_cursor,
+                    get_datum_cursor=catalog._get_datumpage_cursor,
                     filler=catalog.filler)
                 return intake.catalog.local.LocalCatalogEntry(
                     name=run_start_doc['uid'],
