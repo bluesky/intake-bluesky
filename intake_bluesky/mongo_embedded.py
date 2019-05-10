@@ -145,11 +145,11 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     get_run_stop=partial(get_header_field, 'stop'),
                     get_event_descriptors=partial(
                                     get_header_field, 'descriptors'),
-                    get_event_cursor=catalog._get_eventpages,
+                    get_eventpages=catalog._get_eventpages,
                     get_event_count=get_event_count,
                     get_resource=get_resource,
                     get_datum=get_datum,
-                    get_datum_cursor=catalog._get_datumpages,
+                    get_datumpages=catalog._get_datumpages,
                     filler=catalog.filler)
                 return intake.catalog.local.LocalCatalogEntry(
                     name=run_start_doc['uid'],
