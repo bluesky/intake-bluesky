@@ -52,13 +52,13 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
         self.filler = event_model.Filler(parsed_handler_registry)
         super().__init__(**kwargs)
 
-    def _get_eventpage_cursor(self, descriptor_uids, skip=0, limit=None):
+    def _get_eventpages(self, descriptor_uid, skip=0, limit=None):
         if limit is None:
             limit = maxsize
 
         page_cursor = self._db.event.find(
                             {'$and': [
-                                {'descriptor': {'$in': descriptor_uids}},
+                                {'descriptor': descriptor_uid},
                                 {'last_index': {'$gte': skip}},
                                 {'first_index': {'$lte': skip + limit}}]},
                             {'_id': False},
@@ -66,28 +66,7 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
 
         return page_cursor
 
-    def _get_event_cursor(self, descriptor_uids, skip=0, limit=None):
-        if limit is None:
-            limit = maxsize
-
-        page_cursor = self._db.event.find(
-                            {'$and': [
-                                {'descriptor': {'$in': descriptor_uids}},
-                                {'last_index': {'$gte': skip}},
-                                {'first_index': {'$lte': skip + limit}}]},
-                            {'_id': False},
-                            sort=[('last_index', pymongo.ASCENDING)])
-
-        for page_index, event_page in enumerate(page_cursor):
-            for event_index, event in (
-                    enumerate(event_model.unpack_event_page(event_page))):
-                while ((event_index + 1) * (page_index + 1)) < skip:
-                    continue
-                if not ((event_index + 1) * (page_index + 1)) < (skip + limit):
-                    return
-                yield event
-
-    def _get_datumpage_cursor(self, resource_uid, skip=0, limit=None):
+    def _get_datumpages(self, resource_uid, skip=0, limit=None):
         if limit is None:
             limit = maxsize
 
@@ -99,27 +78,6 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                             {'_id': False},
                             sort=[('last_index', pymongo.ASCENDING)])
         return page_cursor
-
-    def _get_datum_cursor(self, resource_uid, skip=0, limit=None):
-        if limit is None:
-            limit = maxsize
-
-        page_cursor = self._db.datum.find(
-                            {'$and': [
-                                {'resource': resource_uid},
-                                {'last_index': {'$gte': skip}},
-                                {'first_index': {'$lte': skip + limit}}]},
-                            {'_id': False},
-                            sort=[('last_index', pymongo.ASCENDING)])
-
-        for page_index, datum_page in enumerate(page_cursor):
-            for datum_index, datum in (
-                    enumerate(event_model.unpack_datum_page(datum_page))):
-                while ((datum_index + 1) * (page_index + 1)) < skip:
-                    continue
-                if not ((datum_index + 1) * (page_index + 1)) < (skip + limit):
-                    return
-                yield datum
 
     def _make_entries_container(self):
         catalog = self
@@ -187,11 +145,11 @@ class BlueskyMongoCatalog(intake.catalog.Catalog):
                     get_run_stop=partial(get_header_field, 'stop'),
                     get_event_descriptors=partial(
                                     get_header_field, 'descriptors'),
-                    get_event_cursor=catalog._get_eventpage_cursor,
+                    get_event_cursor=catalog._get_eventpages,
                     get_event_count=get_event_count,
                     get_resource=get_resource,
                     get_datum=get_datum,
-                    get_datum_cursor=catalog._get_datumpage_cursor,
+                    get_datum_cursor=catalog._get_datumpages,
                     filler=catalog.filler)
                 return intake.catalog.local.LocalCatalogEntry(
                     name=run_start_doc['uid'],
