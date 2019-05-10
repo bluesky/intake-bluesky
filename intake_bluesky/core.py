@@ -18,8 +18,8 @@ import xarray
 import itertools
 
 def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs, resource_docs,
-                    get_eventpage_cursor, filler, get_resource,
-                    get_datumpage_cursor, include=None, exclude=None):
+                    get_eventpages, filler, get_resource,
+                    get_datumpages, include=None, exclude=None):
     """
     Represent the data in one Event stream as an xarray.
 
@@ -79,13 +79,29 @@ def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs, resource_docs,
     # Collect a Dataset for each descriptor. Merge at the end.
     datum_dict = dict()
     for resource in resource_docs:
-        datums = list(get_datumpage_cursor(resource['uid']))
+        datums = list(get_datumpages(resource['uid']))
         keys = datums[0]['datum_kwargs'].keys()
         datum_dict[resource['uid']] = xarray.merge(xarray_list(datums, keys,
                                             sub_doc='datum_kwargs')
 
     for descriptor in descriptor_docs:
-        events = list(get_eventpage_cursor([descriptor['uid']]))
+        events = list(get_eventpages([descriptor['uid']]))
+
+        if fill:
+            try:
+                filler('event', event)
+            except event_model.UnresolvableForeignKeyError as err:
+                datum_id = err.key
+                datum = get_datum(datum_id)
+                resource_uid = datum['resource']
+                resource = get_resource(resource_uid)
+                filler('resource', resource)
+                # Pre-fetch all datum for this resource.
+                for datum in get_datum_cursor(resource_uid):
+                    filler('datum', datum)
+                # TODO -- When to clear the datum cache in filler?
+                filler('event', event)
+
 
         times = []
         for page in events:
@@ -424,11 +440,11 @@ class RunCatalog(intake.catalog.Catalog):
                  get_run_start,
                  get_run_stop,
                  get_event_descriptors,
-                 get_event_cursor,
+                 get_eventpages,
                  get_event_count,
                  get_resource,
                  get_datum,
-                 get_datum_cursor,
+                 get_datumpages,
                  filler,
                  **kwargs):
         # All **kwargs are passed up to base class. TODO: spell them out
@@ -438,11 +454,11 @@ class RunCatalog(intake.catalog.Catalog):
         self._get_run_start = get_run_start
         self._get_run_stop = get_run_stop
         self._get_event_descriptors = get_event_descriptors
-        self._get_event_cursor = get_event_cursor
+        self._get_eventpages= get_eventpages
         self._get_event_count = get_event_count
         self._get_resource = get_resource
         self._get_datum = get_datum
-        self._get_datum_cursor = get_datum_cursor
+        self._get_datumpages = get_datumpages
         self.filler = filler
         super().__init__(**kwargs)
 
@@ -501,11 +517,11 @@ class RunCatalog(intake.catalog.Catalog):
                 stream_name=stream_name,
                 get_run_stop=self._get_run_stop,
                 get_event_descriptors=self._get_event_descriptors,
-                get_event_cursor=self._get_event_cursor,
+                get_eventpages = self._get_eventpages,
                 get_event_count=self._get_event_count,
                 get_resource=self._get_resource,
                 get_datum=self._get_datum,
-                get_datum_cursor=self._get_datum_cursor,
+                get_datumpages=self._get_datumpages,
                 filler=self.filler,
                 metadata={'descriptors': descriptors})
             self._entries[stream_name] = intake.catalog.local.LocalCatalogEntry(
@@ -631,11 +647,11 @@ class BlueskyEventStream(intake_xarray.base.DataSourceMixin):
                  stream_name,
                  get_run_stop,
                  get_event_descriptors,
-                 get_event_cursor,
+                 get_eventpages,
                  get_event_count,
                  get_resource,
                  get_datum,
-                 get_datum_cursor,
+                 get_datumpages,
                  filler,
                  metadata,
                  include=None,
@@ -647,11 +663,11 @@ class BlueskyEventStream(intake_xarray.base.DataSourceMixin):
         self._stream_name = stream_name
         self._get_event_descriptors = get_event_descriptors
         self._get_run_stop = get_run_stop
-        self._get_event_cursor = get_event_cursor
+        self._get_eventpages= get_eventpages
         self._get_event_count = get_event_count
         self._get_resource = get_resource
         self._get_datum = get_datum
-        self._get_datum_cursor = get_datum_cursor
+        self._get_datumpages = get_datumpages
         self.filler = filler
         self.urlpath = ''  # TODO Not sure why I had to add this.
         self._ds = None  # set by _open_dataset below
@@ -676,14 +692,14 @@ class BlueskyEventStream(intake_xarray.base.DataSourceMixin):
         self.metadata.update({'stop': self._run_stop_doc})
         descriptor_docs = [doc for doc in self._get_event_descriptors()
                            if doc.get('name') == self._stream_name]
-        self._ds = pages_to_xarray(
+        self._ds = documents_to_xarray(
             start_doc=self._run_start_doc,
             stop_doc=self._run_stop_doc,
             descriptor_docs=descriptor_docs,
-            get_eventpage_cursor=self._get_event_cursor,
+            get_eventpages=self._get_eventpages,
             filler=self.filler,
             get_resource=self._get_resource,
-            get_datumpage_cursor=self._get_datum_cursor,
+            get_datumpages=self._get_datumpages,
             include=self.include,
             exclude=self.exclude)
 
