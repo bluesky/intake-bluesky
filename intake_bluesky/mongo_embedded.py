@@ -7,7 +7,6 @@ import intake.catalog.local
 import intake.source.base
 import pymongo
 import pymongo.errors
-import bsonnumpy
 
 from .core import parse_handler_registry
 

@@ -16,6 +16,69 @@ import numpy
 import warnings
 import xarray
 import itertools
+from functools import partial
+
+
+def read_xarray(*, start_doc, stop_doc, descriptor_docs, get_eventpages,
+                        filler, get_resource, get_datum, get_datum_cursor,
+                        include=None, exclude=None):
+    data_keys = descriptor['data_keys']
+    fill = any(data_keys[key].get('external') for key in keys)
+
+    if fill:
+    return xarray.merge(fill(
+
+def fill_pages(xarray_eventpages, xarray_datumpages):
+    for page in datumpages:
+        filler('datum_page', page)
+
+    for page in eventpages:
+        filler('event_page', page)
+        yield page
+
+def xarray_eventpages(event_pages):
+    stream_key = 'descriptor'
+    coord_key = 'time'
+    array_keys = ['seq_num', 'time', 'uid']
+    dataframe_keys = ['data', 'timestamps', 'filled']
+
+    for page in event_pages:
+        coords = page[coord_key]
+        xarr = partial(to_xarray, coord_label=coord_key, coords=coords)
+        xpage = {**{stream_key: page[steam_key]},
+                 **{key: xarr(page[key]) for key in array_keys},
+                 **{'data': xarray.merge({key: xarr(page['data'][key])
+                    for key in page[data].keys()}.values())},
+                 **{'timestamps': xarray.merge({key: xarr(page['timestamps'][key])
+                    for key in page[data].keys()}.values())},
+                 **{'filled': xarray.merge({key: xarr(page['filled'][key])
+                    for key in page[data].keys()}.values())}}
+        yield xpage
+
+
+def xarray_datumpages(datum_pages):
+    stream_key = 'resource'
+    coord_key = 'datum_id'
+    array_keys = ['datum_id']
+    dataframe_keys = ['datum_kwargs']
+
+    for page in datum_pages:
+        coords = page[coord_key]
+        xarr = partial(to_xarray, coord_label=coord_key, coords=coords)
+        xpage = {**{stream_key: page[steam_key]},
+                 **{key: xarr(page[key]) for key in array_keys},
+                 **{'datum_kwargs': xarray.merge({key: xarr(page['datum_kwargs'][key])
+                    for key in page[data].keys()}}.values())}
+        yield xpage
+
+
+def to_xarray(array, coord_label, coords):
+    array = (xarray.DataArray(array),
+                dims=(coord_label,),
+                coords={coord_label: coords},
+                name=key))
+    return array
+
 
 def pages_to_xarray(*, start_doc, stop_doc, descriptor_docs, resource_docs,
                     get_eventpages, filler, get_resource,
